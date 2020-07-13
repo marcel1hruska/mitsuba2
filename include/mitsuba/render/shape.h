@@ -134,8 +134,8 @@ public:
      *    sizeof(Float[P])</tt> bytes) that must be supplied to cache
      *    information about the intersection.
      */
-    virtual std::pair<Mask, Float> ray_intersect(const Ray3f &ray, Float *cache,
-                                                 Mask active = true) const;
+    virtual PreliminaryIntersection3f ray_intersect(const Ray3f &ray,
+                                                    Mask active = true) const;
 
     /**
      * \brief Fast ray shadow test
@@ -154,6 +154,8 @@ public:
      */
     virtual Mask ray_test(const Ray3f &ray, Mask active = true) const;
 
+    // TODO update description
+
     /**
      * \brief Given a surface intersection found by \ref ray_intersect(), fill
      * a \ref SurfaceInteraction data structure with detailed information
@@ -161,29 +163,28 @@ public:
      *
      * The implementation should fill in the fields \c p, \c uv, \c n, \c
      * sh_frame.n, \c dp_du, and \c dp_dv. The fields \c t, \c time, \c
-     * wavelengths, \c shape, \c prim_index, \c instance, and \c
-     * has_uv_partials will already have been initialized by the caller. The
-     * field \c wi is initialized by the caller following the call to \ref
-     * fill_surface_interaction(), and \c duv_dx, and \c duv_dy are left
-     * uninitialized.
-     *
-     * \param cache
-     *     Cached information about the previously computed intersection.
+     * wavelengths, \c shape, \c prim_index, \c instance, and \c has_uv_partials
+     * will already have been initialized by the caller. The field \c wi is
+     * initialized by the caller following the call to \ref compute_surface_interaction(), a
+     * nd \c duv_dx, and \c duv_dy are left uninitialized.
      */
-    virtual void fill_surface_interaction(const Ray3f &ray, const Float *cache,
-                                          SurfaceInteraction3f &si, Mask active = true) const;
+    virtual SurfaceInteraction3f compute_surface_interaction(const Ray3f &ray,
+                                                             const PreliminaryIntersection3f &pi,
+                                                             HitComputeFlags flags,
+                                                             Mask active = true) const;
 
+    // TODO update description
     /**
      * \brief Test for an intersection and return detailed information
      *
      * This operation combines the prior \ref ray_intersect() and \ref
-     * fill_surface_interaction() operations in case intersection with a single
+     * compute_surface_interaction() operations in case intersection with a single
      * shape is desired.
      *
      * \param ray
      *     The ray to be tested for an intersection
      */
-    SurfaceInteraction3f ray_intersect(const Ray3f &ray, Mask active = true) const;
+    SurfaceInteraction3f ray_intersect(const Ray3f &ray, HitComputeFlags flags, Mask active = true) const;
 
     //! @}
     // =============================================================
@@ -447,7 +448,7 @@ NAMESPACE_END(mitsuba)
 
 ENOKI_CALL_SUPPORT_TEMPLATE_BEGIN(mitsuba::Shape)
     ENOKI_CALL_SUPPORT_METHOD(normal_derivative)
-    ENOKI_CALL_SUPPORT_METHOD(fill_surface_interaction)
+    ENOKI_CALL_SUPPORT_METHOD(compute_surface_interaction)
     ENOKI_CALL_SUPPORT_METHOD(eval_attribute)
     ENOKI_CALL_SUPPORT_METHOD(eval_attribute_1)
     ENOKI_CALL_SUPPORT_METHOD(eval_attribute_3)

@@ -39,8 +39,9 @@ MTS_PY_EXPORT(Scene) {
     MTS_PY_CLASS(Scene, Object)
         .def(py::init<const Properties>())
         .def("ray_intersect",
-            vectorize(&Scene::ray_intersect),
-            "ray"_a, "active"_a = true, D(Scene, ray_intersect))
+             vectorize(py::overload_cast<const Ray3f &, Mask>(&Scene::ray_intersect, py::const_)),
+             "ray"_a, "active"_a = true, D(Scene, ray_intersect))
+        // TODO add new bindings
         .def("ray_test",
             vectorize(&Scene::ray_test),
             "ray"_a, "active"_a = true)

@@ -273,9 +273,8 @@ public:
     //! @{ \name Ray tracing routines
     // =============================================================
 
-    std::pair<Mask, Float> ray_intersect(const Ray3f &ray,
-                                         Float * /*cache*/,
-                                         Mask active) const override {
+    PreliminaryIntersection3f ray_intersect(const Ray3f &ray,
+                                            Mask active) const override {
         MTS_MASK_ARGUMENT(active);
 
         Float64 mint = Float64(ray.mint);
@@ -296,10 +295,15 @@ public:
         // Sphere fully contains the segment of the ray
         Mask in_bounds = near_t < mint && far_t > maxt;
 
-        Mask valid_intersection =
-            active && solution_found && !out_bounds && !in_bounds;
+        active &= solution_found && !out_bounds && !in_bounds;
 
-        return { valid_intersection, select(near_t < mint, far_t, near_t) };
+        PreliminaryIntersection3f pi;
+        pi.t = select(active,
+                      select(near_t < mint, Float(far_t), Float(near_t)),
+                      math::Infinity<Float>);
+        pi.shape = this;
+
+        return pi;
     }
 
     Mask ray_test(const Ray3f &ray, Mask active) const override {
@@ -326,13 +330,16 @@ public:
         return solution_found && !out_bounds && !in_bounds && active;
     }
 
-    void fill_surface_interaction(const Ray3f &ray, const Float * /*cache*/,
-                                  SurfaceInteraction3f &si_out, Mask active) const override {
+    SurfaceInteraction3f compute_surface_interaction(const Ray3f &ray,
+                                                     const PreliminaryIntersection3f& pi,
+                                                     HitComputeFlags /*flags*/, //TODO use flags
+                                                     Mask active) const override {
         MTS_MASK_ARGUMENT(active);
 
-        SurfaceInteraction3f si(si_out);
+        SurfaceInteraction3f si = zero<SurfaceInteraction3f>();
+        si.t = math::Infinity<Float>;
 
-        si.sh_frame.n = normalize(ray(si.t) - m_center);
+        si.sh_frame.n = normalize(ray(pi.t) - m_center);
 
         // Re-project onto the sphere to improve accuracy
         si.p = fmadd(si.sh_frame.n, m_radius, m_center);
@@ -370,7 +377,7 @@ public:
         si.n = si.sh_frame.n;
         si.time = ray.time;
 
-        si_out[active] = si;
+        return si;
     }
 
     std::pair<Vector3f, Vector3f> normal_derivative(const SurfaceInteraction3f &si,

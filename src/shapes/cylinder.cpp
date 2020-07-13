@@ -244,8 +244,8 @@ public:
     //! @{ \name Ray tracing routines
     // =============================================================
 
-    std::pair<Mask, Float> ray_intersect(const Ray3f &ray_, Float * /*cache*/,
-                                         Mask active) const override {
+    PreliminaryIntersection3f ray_intersect(const Ray3f &ray_,
+                                            Mask active) const override {
         MTS_MASK_ARGUMENT(active);
 
         Ray3f ray = m_to_object.transform_affine(ray_);
@@ -278,13 +278,18 @@ public:
         // Cylinder fully contains the segment of the ray
         Mask in_bounds = near_t < mint && far_t > maxt;
 
-        Mask valid_intersection =
-            active && solution_found && !out_bounds && !in_bounds &&
-            ((z_pos_near >= 0 && z_pos_near <= length && near_t >= mint) ||
-             (z_pos_far  >= 0 && z_pos_far <= length  && far_t <= maxt));
+        active &= solution_found && !out_bounds && !in_bounds &&
+                  ((z_pos_near >= 0 && z_pos_near <= length && near_t >= mint) ||
+                   (z_pos_far  >= 0 && z_pos_far <= length  && far_t <= maxt));
 
-        return { valid_intersection,
-                 select(z_pos_near >= 0 && z_pos_near <= length && near_t >= mint, near_t, far_t) };
+        PreliminaryIntersection3f pi;
+        pi.t = select(active,
+                      select(z_pos_near >= 0 && z_pos_near <= length && near_t >= mint,
+                             Float(near_t), Float(far_t)),
+                      math::Infinity<Float>);
+        pi.shape = this;
+
+        return pi;
     }
 
     Mask ray_test(const Ray3f &ray_, Mask active) const override {
@@ -327,13 +332,15 @@ public:
         return valid_intersection;
     }
 
-    void fill_surface_interaction(const Ray3f &ray, const Float * /*cache*/,
-                                  SurfaceInteraction3f &si_out, Mask active) const override {
+    SurfaceInteraction3f compute_surface_interaction(const Ray3f &ray,
+                                                     const PreliminaryIntersection3f& pi,
+                                                     HitComputeFlags /*flags*/,
+                                                     Mask active) const override {
         MTS_MASK_ARGUMENT(active);
 
-        SurfaceInteraction3f si(si_out);
+        SurfaceInteraction3f si = zero<SurfaceInteraction3f>();
 
-        si.p = ray(si.t);
+        si.p = ray(pi.t);
         Vector3f local = m_to_object * si.p;
 
         Float phi = atan2(local.y(), local.x());
@@ -357,7 +364,7 @@ public:
         si.sh_frame.n = si.n;
         si.time = ray.time;
 
-        si_out[active] = si;
+        return si;
     }
 
     std::pair<Vector3f, Vector3f> normal_derivative(const SurfaceInteraction3f &si,

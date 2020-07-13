@@ -430,16 +430,31 @@ MTS_VARIANT void Scene<Float, Spectrum>::accel_release_gpu() {
 }
 
 MTS_VARIANT typename Scene<Float, Spectrum>::SurfaceInteraction3f
-Scene<Float, Spectrum>::ray_intersect_gpu(const Ray3f &ray_, Mask active) const {
+Scene<Float, Spectrum>::ray_intersect_gpu(const Ray3f &ray_, HitComputeFlags flags, Mask active) const {
     if constexpr (is_cuda_array_v<Float>) {
         Assert(!m_shapes.empty());
         OptixState &s = *(OptixState *) m_accel;
+
+        if (has_flag(flags, HitComputeFlags::Differentiable) && !is_diff_array_v<Float>)
+            Throw("ray_intersect_gpu(): variant should be autodiff when "
+                  "differentiable intersection is requested.");
+
         Ray3f ray(ray_);
         size_t ray_count = std::max(slices(ray.o), slices(ray.d));
         set_slices(ray, ray_count);
         set_slices(active, ray_count);
 
-        SurfaceInteraction3f si = empty<SurfaceInteraction3f>(ray_count);
+        SurfaceInteraction3f si;
+        if (has_flag(flags, HitComputeFlags::Minimal)) {
+            si    = empty<SurfaceInteraction3f>(1); // needed for virtual calls
+            si.t  = empty<Float>(ray_count);
+            si.p  = empty<Point3f>(ray_count);
+            si.uv = empty<Point2f>(ray_count);
+            si.prim_index = empty<UInt32>(ray_count);
+            si.shape      = empty<ShapePtr>(ray_count);
+        } else {
+            si = empty<SurfaceInteraction3f>(ray_count);
+        }
 
         // DEBUG mode: Explicitly instantiate `si` with NaN values.
         // As the integrator should only deal with the lanes of `si` for which
@@ -484,7 +499,9 @@ Scene<Float, Spectrum>::ray_intersect_gpu(const Ray3f &ray_, Mask active) const 
             // Out: Hit flag
             nullptr,
             // top_object
-            s.accel
+            s.accel,
+            // compute_surface_interaction
+            has_flag(flags, HitComputeFlags::NonDifferentiable)
         };
 
         cuda_memcpy_to_device(s.params, &params, sizeof(OptixParams));
@@ -525,10 +542,17 @@ Scene<Float, Spectrum>::ray_intersect_gpu(const Ray3f &ray_, Mask active) const 
         si.instance = nullptr;
         si.duv_dx = si.duv_dy = 0.f;
 
-        // Gram-schmidt orthogonalization to compute local shading frame
-        si.sh_frame.s = normalize(
-            fnmadd(si.sh_frame.n, dot(si.sh_frame.n, si.dp_du), si.dp_du));
-        si.sh_frame.t = cross(si.sh_frame.n, si.sh_frame.s);
+        if (has_flag(flags, HitComputeFlags::Differentiable)) {
+            // Cached info are not needed as they will be recomputed to be differentiable
+            // si.fill_surface_interaction(ray, nullptr, active); // TODO
+        }
+
+        if (has_flag(flags, HitComputeFlags::ShadingFrame)) {
+            // Gram-schmidt orthogonalization to compute local shading frame
+            si.sh_frame.s = normalize(
+                fnmadd(si.sh_frame.n, dot(si.sh_frame.n, si.dp_du), si.dp_du));
+            si.sh_frame.t = cross(si.sh_frame.n, si.sh_frame.s);
+        }
 
         // Incident direction in local coordinates
         si.wi = select(si.is_valid(), si.to_local(-ray.d), -ray.d);
@@ -536,6 +560,7 @@ Scene<Float, Spectrum>::ray_intersect_gpu(const Ray3f &ray_, Mask active) const 
         return si;
     } else {
         ENOKI_MARK_USED(ray_);
+        ENOKI_MARK_USED(flags);
         ENOKI_MARK_USED(active);
         Throw("ray_intersect_gpu() should only be called in GPU mode.");
     }
@@ -584,7 +609,9 @@ Scene<Float, Spectrum>::ray_test_gpu(const Ray3f &ray_, Mask active) const {
             // Out: Hit flag
             hit.data(),
             // top_object
-            s.accel
+            s.accel,
+            // compute_surface_interaction
+            false
         };
 
         cuda_memcpy_to_device(s.params, &params, sizeof(OptixParams));

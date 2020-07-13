@@ -110,9 +110,27 @@ Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray, Mask active) const {
     MTS_MASKED_FUNCTION(ProfilerPhase::RayIntersect, active);
 
     if constexpr (is_cuda_array_v<Float>)
-        return ray_intersect_gpu(ray, active);
+        return ray_intersect_gpu(ray, HitComputeFlags::AllAutomatic, active);
     else
-        return ray_intersect_cpu(ray, active);
+        return ray_intersect_cpu(ray, HitComputeFlags::AllAutomatic, active);
+}
+
+MTS_VARIANT typename Scene<Float, Spectrum>::SurfaceInteraction3f
+Scene<Float, Spectrum>::ray_intersect(const Ray3f &ray, HitComputeFlags flags, Mask active) const {
+    MTS_MASKED_FUNCTION(ProfilerPhase::RayIntersect, active);
+
+    if constexpr (is_cuda_array_v<Float>)
+        return ray_intersect_gpu(ray, flags, active);
+    else
+        return ray_intersect_cpu(ray, flags, active);
+}
+
+MTS_VARIANT typename Scene<Float, Spectrum>::PreliminaryIntersection3f
+Scene<Float, Spectrum>::ray_intersect_preliminary(const Ray3f &ray, Mask active) const {
+    if constexpr (is_cuda_array_v<Float>)
+        return ray_intersect_preliminary_gpu(ray, active);
+    else
+        return ray_intersect_preliminary_cpu(ray, active);
 }
 
 MTS_VARIANT typename Scene<Float, Spectrum>::SurfaceInteraction3f
@@ -216,9 +234,25 @@ MTS_VARIANT void Scene<Float, Spectrum>::traverse(TraversalCallback *callback) {
     }
 }
 
-MTS_VARIANT void Scene<Float, Spectrum>::parameters_changed(const std::vector<std::string> &/*keys*/) {
+MTS_VARIANT void Scene<Float, Spectrum>::parameters_changed(const std::vector<std::string> &keys) {
     if (m_environment)
         m_environment->set_scene(this); // TODO use parameters_changed({"scene"})
+
+    bool update_accel = false;
+    for (auto &s : m_shapes) {
+        if (string::contains(keys, s->id()) || string::contains(keys, s->class_()->name())) {
+            update_accel = true;
+            break;
+        }
+    }
+
+    if (update_accel) {
+        if constexpr (is_cuda_array_v<Float>)
+            accel_parameters_changed_gpu();
+        else {
+            // TODO update Embree BVH or Mitsuba kdtree if necessary
+        }
+    }
 }
 
 MTS_VARIANT std::string Scene<Float, Spectrum>::to_string() const {

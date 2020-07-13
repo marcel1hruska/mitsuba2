@@ -29,8 +29,9 @@ MTS_PY_EXPORT(Shape) {
                 py::overload_cast<const Ray3f &, Mask>(&Shape::ray_intersect, py::const_)),
             "ray"_a, "active"_a = true, D(Shape, ray_intersect))
         .def("ray_test", vectorize(&Shape::ray_test), "ray"_a, "active"_a = true)
-        .def("fill_surface_interaction", &Shape::fill_surface_interaction,
-                "ray"_a, "cache"_a, "si"_a, "active"_a = true) // TODO vectorize this
+        // .def("fill_surface_interaction", &Shape::fill_surface_interaction,
+        //         "ray"_a, "cache"_a, "si"_a, "active"_a = true) // TODO vectorize this
+        // TODO add compute_surface_interaction
         .def("bbox", py::overload_cast<>(
             &Shape::bbox, py::const_), D(Shape, bbox))
         .def("bbox", py::overload_cast<ScalarUInt32>(

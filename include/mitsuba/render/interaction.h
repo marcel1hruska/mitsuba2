@@ -76,6 +76,8 @@ struct Interaction {
     ENOKI_STRUCT(Interaction, t, time, wavelengths, p);
 };
 
+// -----------------------------------------------------------------------------
+
 /// Stores information related to a surface scattering interaction
 template <typename Float_, typename Spectrum_>
 struct SurfaceInteraction : Interaction<Float_, Spectrum_> {
@@ -347,6 +349,7 @@ struct SurfaceInteraction : Interaction<Float_, Spectrum_> {
     )
 };
 
+// -----------------------------------------------------------------------------
 
 /// Stores information related to a medium scattering interaction
 template <typename Float_, typename Spectrum_>
@@ -385,7 +388,6 @@ struct MediumInteraction : Interaction<Float_, Spectrum_> {
     /// mint used when sampling the given distance "t".
     Float mint;
 
-
     //! @}
     // =============================================================
 
@@ -404,13 +406,161 @@ struct MediumInteraction : Interaction<Float_, Spectrum_> {
         return sh_frame.to_local(v);
     }
 
+    //! @}
+    // =============================================================
+
+
     ENOKI_DERIVED_STRUCT(MediumInteraction, Base,
         ENOKI_BASE_FIELDS(t, time, wavelengths, p),
         ENOKI_DERIVED_FIELDS(medium, sh_frame, wi, sigma_s, sigma_n, sigma_t, combined_extinction, mint)
     )
-
 };
 
+// -----------------------------------------------------------------------------
+// TODO add description
+enum class HitComputeFlags : uint32_t {
+
+    // =============================================================
+    //             Surface interaction compute flags
+    // =============================================================
+
+    /// No flags set
+    None                  = 0x00000,
+
+    /// Compute position and geometric normal
+    Minimal               = 0x00001,
+
+    /// The UV coordinates will be computed
+    UV                    = 0x00002,
+
+    /// The partial derivative of the UV coordinates will be computed
+    DPDUV                 = 0x00004,
+
+    /// The shading frame be computed
+    ShadingFrame          = 0x00008,
+
+    // =============================================================
+    //!              Differentiability compute flags
+    // =============================================================
+
+    /// Differentiability will depend on global parameter
+    Automatic             = 0x00010,
+
+    /// Force computed fields to not be be differentiable
+    NonDifferentiable     = 0x00040,
+
+    /// Force computed fields to be differentiable w.r.t. the shape's parameters
+    Differentiable        = 0x00080,
+
+    // =============================================================
+    //!                 Compound compute flags
+    // =============================================================
+
+    /// Compute all fields of the surface interaction data structure (default)
+    AllAutomatic = UV | DPDUV | ShadingFrame | Automatic,
+
+    /// Compute all fields of the surface interaction data structure in a non differentiable way
+    AllNonDifferentiable = UV | DPDUV | ShadingFrame | NonDifferentiable,
+
+    /// Compute all fields of the surface interaction data structure in a differentiable way
+    AllDifferentiable    = UV | DPDUV | ShadingFrame | Differentiable,
+
+    // TODO add mode for detaching `prim_uv` when differentiable
+};
+
+constexpr uint32_t operator |(HitComputeFlags f1, HitComputeFlags f2)  { return (uint32_t) f1 | (uint32_t) f2; }
+constexpr uint32_t operator |(uint32_t f1, HitComputeFlags f2)         { return f1 | (uint32_t) f2; }
+constexpr uint32_t operator &(HitComputeFlags f1, HitComputeFlags f2)  { return (uint32_t) f1 & (uint32_t) f2; }
+constexpr uint32_t operator &(uint32_t f1, HitComputeFlags f2)         { return f1 & (uint32_t) f2; }
+constexpr uint32_t operator ~(HitComputeFlags f1)                      { return ~(uint32_t) f1; }
+constexpr uint32_t operator +(HitComputeFlags e)                       { return (uint32_t) e; }
+constexpr bool has_flag(HitComputeFlags f0, HitComputeFlags f1)        { return ((uint32_t) f0 & (uint32_t) f1) != 0; }
+
+// -----------------------------------------------------------------------------
+// TODO add description
+/// Ray intersection data structure
+template <typename Float_, typename Spectrum_>
+struct PreliminaryIntersection {
+
+    // =============================================================
+    //! @{ \name Type declarations
+    // =============================================================
+
+    using Float    = Float_;
+    using Spectrum = Spectrum_;
+    MTS_IMPORT_RENDER_BASIC_TYPES()
+    MTS_IMPORT_OBJECT_TYPES()
+    using Index = typename CoreAliases::UInt32;
+    using SurfaceInteraction3f = SurfaceInteraction<Float, Spectrum>;
+
+    //! @}
+    // =============================================================
+
+    // =============================================================
+    //! @{ \name Fields
+    // =============================================================
+
+    /// Distance traveled along the ray
+    Float t = math::Infinity<Float>;
+
+    /// 2D coordinates on the primitive surface parameterization
+    Point2f prim_uv;
+
+    /// Pointer to the associated shape
+    ShapePtr shape = nullptr;
+
+    /// Primitive index, e.g. the triangle ID (if applicable)
+    Index prim_index;
+
+    /// Shape index, e.g. the shape ID in shapegroup (if applicable)
+    Index shape_index;
+
+    /// Stores a pointer to the parent instance (if applicable)
+    ShapePtr instance = nullptr;
+
+    //! @}
+    // =============================================================
+
+    // =============================================================
+    //! @{ \name Methods
+    // =============================================================
+
+    /// Is the current interaction valid?
+    Mask is_valid() const {
+        return neq(t, math::Infinity<Float>);
+    }
+
+    SurfaceInteraction3f compute_surface_interaction(const Ray3f &ray, HitComputeFlags flags, Mask active) {
+        // TODO use flags to check whether to call the method
+        SurfaceInteraction3f si = shape->compute_surface_interaction(ray, *this, flags, active);
+        active &= is_valid();
+        si.t = select(active, t, math::Infinity<Float>);
+        si.prim_index  = prim_index;
+        si.shape       = shape;
+        si.instance    = instance;
+        si.time        = ray.time;
+        si.wavelengths = ray.wavelengths;
+
+        if (has_flag(flags, HitComputeFlags::ShadingFrame)) { // TODO
+            // Gram-schmidt orthogonalization to compute local shading frame
+            si.sh_frame.s = normalize(
+                fnmadd(si.sh_frame.n, dot(si.sh_frame.n, si.dp_du), si.dp_du));
+            si.sh_frame.t = cross(si.sh_frame.n, si.sh_frame.s);
+        }
+
+        // Incident direction in local coordinates
+        si.wi = select(active, si.to_local(-ray.d), -ray.d);
+
+        si.duv_dx = si.duv_dy = zero<Point2f>();
+
+        return si;
+    }
+
+    //! @}
+    // =============================================================
+
+    ENOKI_STRUCT(PreliminaryIntersection, t, prim_uv, shape, prim_index, shape_index, instance);
+};
 
 // -----------------------------------------------------------------------------
 
@@ -477,6 +627,23 @@ std::ostream &operator<<(std::ostream &os, const MediumInteraction<Float, Spectr
     return os;
 }
 
+template <typename Float, typename Spectrum>
+std::ostream &operator<<(std::ostream &os, const PreliminaryIntersection<Float, Spectrum> &pi) {
+    if (none(pi.is_valid())) {
+        os << "PreliminaryIntersection[invalid]";
+    } else {
+        os << "PreliminaryIntersection[" << std::endl
+        << "  t = " << pi.t << "," << std::endl
+        << "  prim_uv = " << pi.prim_uv << "," << std::endl
+        << "  prim_index = " << pi.prim_index << "," << std::endl
+        << "  shape_index = " << pi.shape_index << "," << std::endl
+        << "  shape = " << pi.shape << "," << std::endl
+        << "  instance = " << pi.instance << "," << std::endl
+        << "]";
+    }
+    return os;
+}
+
 NAMESPACE_END(mitsuba)
 
 // -----------------------------------------------------------------------
@@ -491,6 +658,8 @@ ENOKI_STRUCT_SUPPORT(mitsuba::SurfaceInteraction, t, time, wavelengths, p,
 
 ENOKI_STRUCT_SUPPORT(mitsuba::MediumInteraction, t, time, wavelengths, p,
                      medium, sh_frame, wi, sigma_s, sigma_n, sigma_t, combined_extinction, mint)
+
+ENOKI_STRUCT_SUPPORT(mitsuba::PreliminaryIntersection, t, prim_uv, shape, prim_index, shape_index, instance)
 
 //! @}
 // -----------------------------------------------------------------------

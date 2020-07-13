@@ -139,8 +139,8 @@ public:
     //! @{ \name Ray tracing routines
     // =============================================================
 
-    std::pair<Mask, Float> ray_intersect(const Ray3f &ray_, Float *cache,
-                                         Mask active) const override {
+    PreliminaryIntersection3f ray_intersect(const Ray3f &ray_,
+                                            Mask active) const override {
         MTS_MASK_ARGUMENT(active);
 
         Ray3f ray     = m_to_object.transform_affine(ray_);
@@ -153,14 +153,12 @@ public:
                         && abs(local.x()) <= 1.f
                         && abs(local.y()) <= 1.f;
 
-        t = select(active, t, Float(math::Infinity<Float>));
+        PreliminaryIntersection3f pi;
+        pi.t = select(active, t, math::Infinity<Float>);
+        pi.prim_uv = Point2f(local.x(), local.y());
+        pi.shape = this;
 
-        if (cache) {
-            masked(cache[0], active) = local.x();
-            masked(cache[1], active) = local.y();
-        }
-
-        return { active, t };
+        return pi;
     }
 
     Mask ray_test(const Ray3f &ray_, Mask active) const override {
@@ -177,34 +175,41 @@ public:
                       && abs(local.y()) <= 1.f;
     }
 
-    void fill_surface_interaction(const Ray3f &ray_, const Float *cache,
-                                  SurfaceInteraction3f &si_out, Mask active) const override {
+    SurfaceInteraction3f compute_surface_interaction(const Ray3f &ray,
+                                                     const PreliminaryIntersection3f& pi,
+                                                     HitComputeFlags flags,
+                                                     Mask active) const override {
         MTS_MASK_ARGUMENT(active);
+        #if defined(MTS_ENABLE_EMBREE)
+            // TODO
+            // cache = nullptr;
+        #endif
 
-#if !defined(MTS_ENABLE_EMBREE)
-        Float local_x = cache[0];
-        Float local_y = cache[1];
-#else
-        ENOKI_MARK_USED(cache);
-        Ray3f ray     = m_to_object.transform_affine(ray_);
-        Float t       = -ray.o.z() * ray.d_rcp.z();
-        Point3f local = ray(t);
-        Float local_x = local.x();
-        Float local_y = local.y();
-#endif
+        SurfaceInteraction3f si = zero<SurfaceInteraction3f>();
+        si.t = math::Infinity<Float>;
 
-        SurfaceInteraction3f si(si_out);
+        Float local_x, local_y;
+        // if (cache) { // TODO use flags
+            local_x = pi.prim_uv[0];
+            local_y = pi.prim_uv[1];
+        // } else {
+            // Ray3f ray_local = m_to_object.transform_affine(ray);
+            // Float t = -ray_local.o.z() * ray_local.d_rcp.z();
+            // Point3f local = ray_local(t);
+            // local_x = local.x();
+            // local_y = local.y();
+        // }
 
         si.n          = m_frame.n;
         si.sh_frame.n = m_frame.n;
         si.dp_du      = m_frame.s;
         si.dp_dv      = m_frame.t;
-        si.p          = ray_(si.t);
-        si.time       = ray_.time;
+        si.p          = ray(pi.t);
+        si.time       = ray.time;
         si.uv         = Point2f(fmadd(local_x, .5f, .5f),
                                 fmadd(local_y, .5f, .5f));
 
-        si_out[active] = si;
+        return si;
     }
 
     std::pair<Vector3f, Vector3f> normal_derivative(const SurfaceInteraction3f & /*si*/,

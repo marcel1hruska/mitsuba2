@@ -10,7 +10,8 @@ NAMESPACE_BEGIN(mitsuba)
 template <typename Float, typename Spectrum>
 class MTS_EXPORT_RENDER Scene : public Object {
 public:
-    MTS_IMPORT_TYPES(BSDF, Emitter, Film, Sampler, Shape, Sensor, Integrator, Medium, MediumPtr)
+    MTS_IMPORT_TYPES(BSDF, Emitter, EmitterPtr, Film, Sampler, Shape, ShapePtr,
+                     Sensor, Integrator, Medium, MediumPtr)
 
     /// Instantiate a scene from a \ref Properties object
     Scene(const Properties &props);
@@ -35,6 +36,13 @@ public:
      */
     SurfaceInteraction3f ray_intersect(const Ray3f &ray,
                                        Mask active = true) const;
+
+    SurfaceInteraction3f ray_intersect(const Ray3f &ray,
+                                       HitComputeFlags flags = HitComputeFlags::AllAutomatic,
+                                       Mask active = true) const;
+
+    PreliminaryIntersection3f ray_intersect_preliminary(const Ray3f &ray,
+                                                        Mask active = true) const;
 
     /**
      * \brief Ray intersection using brute force search. Used in
@@ -179,9 +187,13 @@ protected:
     void accel_release_cpu();
     void accel_release_gpu();
 
+    /// Trace a ray and only return a preliminary intersection data structure
+    MTS_INLINE PreliminaryIntersection3f ray_intersect_preliminary_cpu(const Ray3f &ray, Mask active) const;
+    MTS_INLINE PreliminaryIntersection3f ray_intersect_preliminary_gpu(const Ray3f &ray, Mask active) const;
+
     /// Trace a ray
-    MTS_INLINE SurfaceInteraction3f ray_intersect_cpu(const Ray3f &ray, Mask active) const;
-    MTS_INLINE SurfaceInteraction3f ray_intersect_gpu(const Ray3f &ray, Mask active) const;
+    MTS_INLINE SurfaceInteraction3f ray_intersect_cpu(const Ray3f &ray, HitComputeFlags flags, Mask active) const;
+    MTS_INLINE SurfaceInteraction3f ray_intersect_gpu(const Ray3f &ray, HitComputeFlags flags, Mask active) const;
     MTS_INLINE SurfaceInteraction3f ray_intersect_naive_cpu(const Ray3f &ray, Mask active) const;
 
     /// Trace a shadow ray
