@@ -4,6 +4,7 @@
 #include <mitsuba/render/bsdf.h>
 #include <mitsuba/render/ior.h>
 #include <mitsuba/render/microfacet.h>
+#include <mitsuba/render/iridescence.h>
 #include <mitsuba/render/texture.h>
 
 NAMESPACE_BEGIN(mitsuba)
@@ -142,7 +143,7 @@ template <typename Float, typename Spectrum>
 class RoughConductor final : public BSDF<Float, Spectrum> {
 public:
     MTS_IMPORT_BASE(BSDF, m_flags, m_components)
-    MTS_IMPORT_TYPES(Texture, MicrofacetDistribution)
+    MTS_IMPORT_TYPES(Texture, MicrofacetDistribution, Iridescence)
 
     RoughConductor(const Properties &props) : Base(props) {
         std::string material = props.string("material", "none");
@@ -153,6 +154,15 @@ public:
                 Throw("Should specify either (eta, k) or material, not both.");
         } else {
             std::tie(m_eta, m_k) = complex_ior_from_file<Spectrum, Texture>(props.string("material", "Cu"));
+        }
+
+        // is surface iridescent
+        if (props.has_property("film_eta") || props.has_property("height") ||
+                props.has_property("ext_eta")) {
+            m_iridescent = true;
+            m_height     = props.texture<Texture>("height", 400.f);
+            m_film_eta   = props.texture<Texture>("film_eta", lookup_ior("air"));
+            m_ext_eta    = props.texture<Texture>("ext_eta", lookup_ior("air"));
         }
 
         if (props.has_property("distribution")) {
@@ -277,6 +287,18 @@ public:
         if (m_specular_reflectance)
             weight *= m_specular_reflectance->eval(si, active);
 
+        if constexpr (is_spectral_v<Spectrum>) {
+            // Iridescence term instead of built-in fresnel
+            if (m_iridescent) {
+                Iridescence irid(m_height->eval(si, active),
+                                 m_film_eta->eval(si, active),
+                                 m_ext_eta->eval(si, active));
+
+                F = irid.iridescence_term(dot(si.wi, m), m_eta->eval(si, active),
+                    m_k->eval(si, active), si.wavelengths);
+            }
+        }
+
         return { bs, (F * weight) & active };
     }
 
@@ -352,6 +374,18 @@ public:
         /* If requested, include the specular reflectance component */
         if (m_specular_reflectance)
             result *= m_specular_reflectance->eval(si, active);
+
+        if constexpr (is_spectral_v<Spectrum>) {
+            // Iridescence term instead of built-in fresnel
+            if (m_iridescent) {
+                Iridescence irid(m_height->eval(si, active),
+                                 m_film_eta->eval(si, active),
+                                 m_ext_eta->eval(si, active));
+                F = irid.iridescence_term(
+                    dot(si.wi, H),m_eta->eval(si, active),
+                    m_k->eval(si, active), si.wavelengths);
+            }
+        }
 
         return (F * result) & active;
     }
@@ -435,6 +469,11 @@ private:
     ref<Texture> m_k;
     /// Specular reflectance component
     ref<Texture> m_specular_reflectance;
+
+    ref<Texture> m_ext_eta;
+    ref<Texture> m_film_eta;
+    ref<Texture> m_height;
+    bool m_iridescent = false;
 };
 
 MTS_IMPLEMENT_CLASS_VARIANT(RoughConductor, BSDF)

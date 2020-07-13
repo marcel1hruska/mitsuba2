@@ -37,6 +37,7 @@ add_library(mitsuba-render-obj OBJECT
   ${INC_DIR}/fwd.h
   ${INC_DIR}/ior.h
   ${INC_DIR}/microfacet.h
+  ${INC_DIR}/iridescence.h
   ${INC_DIR}/records.h
   ${INC_DIR}/volume_texture.h
 
@@ -53,6 +54,7 @@ add_library(mitsuba-render-obj OBJECT
   mesh.cpp         ${INC_DIR}/mesh.h
   microfacet.cpp   ${INC_DIR}/microfacet.h
                    ${INC_DIR}/mueller.h
+  iridescence.cpp  ${INC_DIR}/iridescence.h
   phase.cpp        ${INC_DIR}/phase.h
   sampler.cpp      ${INC_DIR}/sampler.h
   scene.cpp        ${INC_DIR}/scene.h
