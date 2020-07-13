@@ -20,6 +20,7 @@ template <typename Float, typename Spectrum> class MonteCarloIntegrator;
 template <typename Float, typename Spectrum> class Medium;
 template <typename Float, typename Spectrum> class Mesh;
 template <typename Float, typename Spectrum> class MicrofacetDistribution;
+template <typename Float, typename Spectrum> class Iridescence;
 template <typename Float, typename Spectrum> class ReconstructionFilter;
 template <typename Float, typename Spectrum> class Sampler;
 template <typename Float, typename Spectrum> class Scene;
@@ -69,6 +70,7 @@ template <typename Float_, typename Spectrum_> struct RenderAliases {
     using Scene                  = mitsuba::Scene<FloatU, SpectrumU>;
     using Sampler                = mitsuba::Sampler<FloatU, SpectrumU>;
     using MicrofacetDistribution = mitsuba::MicrofacetDistribution<FloatU, SpectrumU>;
+    using Iridescence            = mitsuba::Iridescence<FloatU, SpectrumU>;
     using Shape                  = mitsuba::Shape<FloatU, SpectrumU>;
     using ShapeKDTree            = mitsuba::ShapeKDTree<FloatU, SpectrumU>;
     using Mesh                   = mitsuba::Mesh<FloatU, SpectrumU>;
@@ -125,6 +127,7 @@ template <typename Float_, typename Spectrum_> struct RenderAliases {
     using Scene                  = typename RenderAliases::Scene;                                  \
     using Sampler                = typename RenderAliases::Sampler;                                \
     using MicrofacetDistribution = typename RenderAliases::MicrofacetDistribution;                 \
+    using Iridescence            = typename RenderAliases::Iridescence;                            \
     using Shape                  = typename RenderAliases::Shape;                                  \
     using ShapeKDTree            = typename RenderAliases::ShapeKDTree;                            \
     using Mesh                   = typename RenderAliases::Mesh;                                   \
