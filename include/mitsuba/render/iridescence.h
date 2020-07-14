@@ -66,11 +66,11 @@ public:
             T121s = 0.0;
         } else {
             ct2                  = sqrt(cos_theta_2);
-            std::tie(R12p, R12s) = fresnel_conductor_exact(
+            std::tie(R12s, R12p) = fresnel_conductor_exact(
                 Spectrum(cos_theta), m_film_eta / m_ext_eta, 0.0);
 
             // Reflected part by the base
-            std::tie(R23p, R23s) =
+            std::tie(R23s, R23p) =
                 fresnel_conductor_exact(ct2, eta / m_film_eta, k / m_film_eta);
 
             // Compute the transmission coefficients
@@ -87,9 +87,9 @@ public:
             Rs, cosP, irid, I(0.);
 
         /* Evaluate the phase shift */
-        std::tie(phi21p, phi21s) = fresnel_phase_exact(
+        std::tie(phi21s, phi21p) = fresnel_phase_exact(
             Spectrum(cos_theta), Spectrum(1.0), m_film_eta, Spectrum(0.0));
-        std::tie(phi23p, phi23s) = fresnel_phase_exact(ct2, m_film_eta, eta, k);
+        std::tie(phi23s, phi23p) = fresnel_phase_exact(ct2, m_film_eta, eta, k);
         phi21p                   = Spectrum(M_PI) - phi21p;
         phi21s                   = Spectrum(M_PI) - phi21s;
 
