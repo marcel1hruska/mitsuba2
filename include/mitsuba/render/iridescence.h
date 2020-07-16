@@ -127,7 +127,7 @@ protected:
     Spectrum clamp_negative(const Spectrum &s) const {
         Spectrum value;
         for (int i = 0; i < s.size(); i++) {
-            value[i] = (std::isnan(s[i])) ? 0.f : std::max<Float>(s[i], 0.f);
+            value[i] = (enoki::isnan(s[i]) != 0.0) ? 0.f : max(s[i], 0.f);
         }
         return value;
     }

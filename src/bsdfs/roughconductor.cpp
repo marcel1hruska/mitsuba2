@@ -287,7 +287,7 @@ public:
         if (m_specular_reflectance)
             weight *= m_specular_reflectance->eval(si, active);
 
-        if constexpr (is_spectral_v<Spectrum>) {
+        if constexpr (is_spectral_v<Spectrum> && !is_polarized_v<Spectrum>) {
             // Iridescence term instead of built-in fresnel
             if (m_iridescent) {
                 Iridescence irid(m_height->eval(si, active),
@@ -375,7 +375,7 @@ public:
         if (m_specular_reflectance)
             result *= m_specular_reflectance->eval(si, active);
 
-        if constexpr (is_spectral_v<Spectrum>) {
+        if constexpr (is_spectral_v<Spectrum> && !is_polarized_v<Spectrum>) {
             // Iridescence term instead of built-in fresnel
             if (m_iridescent) {
                 Iridescence irid(m_height->eval(si, active),
